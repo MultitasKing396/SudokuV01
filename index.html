@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Sudoku NFC Mini Game</title>
+<style>
+  html, body {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+    margin: 0;
+    padding: 0;
+  }
+  body {
+    background: #111;
+    color: #fff;
+    font-family: sans-serif;
+    text-align: center;
+    user-select: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+  .head { font-size: 13px; letter-spacing: 1px; margin-bottom: 6px; color: #ccc; }
+  .head b { color: #00e5ff; font-size: 15px; }
+  .bar { width: 292px; margin: 0 auto 8px; display: flex; justify-content: space-between; align-items: center; }
+  .reset { height: 32px; padding: 0 12px; font-size: 12px; background: #333; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
+  .pause { width: 42px; height: 32px; font-size: 15px; background: #2a2a2a; color: #fff; border: 1px solid #555; border-radius: 6px; cursor: pointer; }
+  .pause:active { background: #444; }
+  .board-wrap { position: relative; width: 292px; height: 292px; margin: 0 auto 10px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(9, 1fr);
+    grid-template-rows: repeat(9, 1fr);
+    width: 292px;
+    height: 292px;
+    background: #000;
+    border: 2px solid #666;
+    box-sizing: border-box;
+  }
+  .cell {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 17px;
+    border-right: 1px solid #2a2a2a;
+    border-bottom: 1px solid #2a2a2a;
+    cursor: pointer;
+    box-sizing: border-box;
+  }
+  .cell:nth-child(3n) { border-right: 2px solid #666; }
+  .cell:nth-child(9n) { border-right: 0; }
+  .cell.b-thick { border-bottom: 2px solid #666; }
+  .cell.given { color: #ffffff; font-weight: bold; }
+  .cell.user { color: #00e5ff; font-weight: bold; }
+  .cell.err { color: #ff3b30; background: rgba(255, 59, 48, 0.16); }
+  .cell.same { background: rgba(0, 229, 255, 0.12); }
+  .cell.sel { background: rgba(0, 229, 255, 0.32); }
+  .overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.92);
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border: 2px solid #666;
+    box-sizing: border-box;
+    padding: 16px;
+    z-index: 20;
+  }
+  .overlay.show { display: flex; }
+  .overlay h2 { margin: 0 0 12px; font-size: 20px; color: #00e5ff; letter-spacing: 1px; }
+  .overlay p { margin: 4px 0; font-size: 14px; color: #fff; }
+  .overlay .sub { margin-top: 16px; font-size: 11px; color: #777; }
+  .diff-btns { display: flex; flex-direction: column; gap: 10px; width: 170px; margin-top: 6px; }
+  .diff-btns button {
+    padding: 12px 0;
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    background: #222;
+    color: #fff;
+    border: 1px solid #555;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .diff-btns button:active { background: #444; }
+  .diff-btns button.easy { border-color: #00ff00; color: #00ff00; }
+  .diff-btns button.med { border-color: #00e5ff; color: #00e5ff; }
+  .diff-btns button.hard { border-color: #ff7700; color: #ff7700; }
+  .numpad {
+    display: grid;
+    grid-template-columns: repeat(5, 52px);
+    gap: 6px;
+    justify-content: center;
+  }
+  .numpad button {
+    height: 44px;
+    font-size: 18px;
+    font-weight: bold;
+    background: #222;
+    color: #fff;
+    border: 1px solid #444;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .numpad button:active { background: #444; }
+  .numpad button.del { color: #ff3b30; font-size: 16px; }
+  .info { font-size: 11px; color: #888; margin-top: 10px; }
+</style>
+</head>
+<body>
+  <div class="head">SUDOKU NFC MINI GAME<br><span id="lvlLabel">STUFE WÄHLEN</span> · ZEIT <b id="tm">00:00</b></div>
+  <div class="bar">
+    <button class="reset" onclick="showMenu()">Neu starten</button>
+    <button id="pb" class="pause" onclick="togglePause()">▶</button>
+  </div>
+  <div class="board-wrap">
+    <div id="grid" class="grid"></div>
+    <div id="menuOv" class="overlay show">
+      <h2>SCHWIERIGKEIT</h2>
+      <div class="diff-btns">
+        <button class="easy" onclick="startGame('easy')">EINFACH</button>
+        <button class="med" onclick="startGame('med')">MITTEL</button>
+        <button class="hard" onclick="startGame('hard')">SCHWER</button>
+      </div>
+    </div>
+    <div id="ov" class="overlay" onclick="handleOverlayClick()">
+      <h2 id="ovTitle">GELÖST!</h2>
+      <p id="ovTime"></p>
+      <p id="ovBest"></p>
+      <div class="sub" id="ovSub">Tippen für neues Rätsel</div>
+    </div>
+  </div>
+  <div class="numpad">
+    <button onclick="setNum(1)">1</button>
+    <button onclick="setNum(2)">2</button>
+    <button onclick="setNum(3)">3</button>
+    <button onclick="setNum(4)">4</button>
+    <button onclick="setNum(5)">5</button>
+    <button onclick="setNum(6)">6</button>
+    <button onclick="setNum(7)">7</button>
+    <button onclick="setNum(8)">8</button>
+    <button onclick="setNum(9)">9</button>
+    <button class="del" onclick="setNum(0)">⌫</button>
+  </div>
+  <div class="info">by Alp</div>
+
+<script>
+const gridEl = document.getElementById("grid");
+const tmEl = document.getElementById("tm");
+const pbEl = document.getElementById("pb");
+const lvlEl = document.getElementById("lvlLabel");
+const menuOv = document.getElementById("menuOv");
+const ovEl = document.getElementById("ov");
+const ovTitle = document.getElementById("ovTitle");
+const ovTime = document.getElementById("ovTime");
+const ovBest = document.getElementById("ovBest");
+const ovSub = document.getElementById("ovSub");
+
+let currentDiff = "med";
+let solution = Array(81).fill(0);
+let puzzle = Array(81).fill(0);
+let current = Array(81).fill(0);
+let selected = -1;
+let sec = 0;
+let timer = null;
+let paused = false;
+let won = false;
+let inMenu = true;
+
+function getDiffInfo(diff) {
+  if (diff === "easy") return { name: "EINFACH", holes: 32, color: "#00ff00" };
+  if (diff === "hard") return { name: "SCHWER",  holes: 54, color: "#ff7700" };
+  return { name: "MITTEL", holes: 44, color: "#00e5ff" };
+}
+
+function getBest() {
+  return Number(localStorage.getItem("sudoku_nfc_best_" + currentDiff)) || 0;
+}
+
+function setBest(val) {
+  localStorage.setItem("sudoku_nfc_best_" + currentDiff, val);
+}
+
+function formatTime(s) {
+  const m = String(Math.floor(s / 60)).padStart(2, "0");
+  const r = String(s % 60).padStart(2, "0");
+  return m + ":" + r;
+}
+
+function shuffle(arr) {
+  const copy = arr.slice();
+  const res = Array.of();
+  while (copy.length > 0) {
+    const idx = Math.floor(Math.random() * copy.length);
+    res.push(copy.at(idx));
+    copy.splice(idx, 1);
+  }
+  return res;
+}
+
+function isValid(board, idx, num) {
+  const r = Math.floor(idx / 9);
+  const c = idx % 9;
+  const br = Math.floor(r / 3) * 3;
+  const bc = Math.floor(c / 3) * 3;
+  for (let i = 0; i < 9; i++) {
+    if (board.at(r * 9 + i) === num) return false;
+    if (board.at(i * 9 + c) === num) return false;
+    const rr = br + Math.floor(i / 3);
+    const cc = bc + (i % 3);
+    if (board.at(rr * 9 + cc) === num) return false;
+  }
+  return true;
+}
+
+function solveBoard(board) {
+  const empty = board.indexOf(0);
+  if (empty === -1) return true;
+  const nums = shuffle(Array.of(1, 2, 3, 4, 5, 6, 7, 8, 9));
+  for (let n of nums) {
+    if (isValid(board, empty, n)) {
+      board.splice(empty, 1, n);
+      if (solveBoard(board)) return true;
+      board.splice(empty, 1, 0);
+    }
+  }
+  return false;
+}
+
+function generateSudoku(holes) {
+  const full = Array(81).fill(0);
+  solveBoard(full);
+  solution = full.slice();
+  const puz = full.slice();
+  const indices = shuffle(Array.from({length: 81}, (_, k) => k));
+  let removed = 0;
+  for (let idx of indices) {
+    if (removed >= holes) break;
+    puz.splice(idx, 1, 0);
+    removed++;
+  }
+  puzzle = puz;
+  current = puz.slice();
+}
+
+function render() {
+  gridEl.innerHTML = "";
+  const selVal = selected >= 0 ? current.at(selected) : 0;
+  for (let i = 0; i < 81; i++) {
+    const cell = document.createElement("div");
+    cell.className = "cell";
+    const r = Math.floor(i / 9);
+    if (r === 2 || r === 5) cell.classList.add("b-thick");
+    const val = current.at(i);
+    if (val !== 0) {
+      cell.textContent = val;
+      if (puzzle.at(i) !== 0) {
+        cell.classList.add("given");
+      } else {
+        cell.classList.add("user");
+        if (val !== solution.at(i)) cell.classList.add("err");
+      }
+      if (selVal !== 0 && val === selVal && i !== selected) {
+        cell.classList.add("same");
+      }
+    }
+    if (i === selected) cell.classList.add("sel");
+    cell.onclick = () => {
+      if (inMenu || paused || won) return;
+      selected = i;
+      render();
+    };
+    gridEl.appendChild(cell);
+  }
+}
+
+function checkWin() {
+  for (let i = 0; i < 81; i++) {
+    if (current.at(i) !== solution.at(i)) return;
+  }
+  won = true;
+  clearInterval(timer);
+  pbEl.textContent = "▶";
+  let best = getBest();
+  if (best === 0 || sec < best) {
+    best = sec;
+    setBest(best);
+  }
+  const info = getDiffInfo(currentDiff);
+  ovTitle.textContent = "GELÖST!";
+  ovTitle.style.color = info.color;
+  ovTime.textContent = "Zeit (" + info.name + "): " + formatTime(sec);
+  ovBest.textContent = "Bestzeit: " + formatTime(best);
+  ovSub.textContent = "Tippen für Stufenauswahl";
+  ovEl.classList.add("show");
+}
+
+function setNum(n) {
+  if (inMenu || paused || won || selected < 0) return;
+  if (puzzle.at(selected) !== 0) return;
+  current.splice(selected, 1, n);
+  render();
+  if (n !== 0) checkWin();
+}
+
+function togglePause() {
+  if (inMenu) return;
+  if (won) {
+    showMenu();
+    return;
+  }
+  paused = !paused;
+  if (paused) {
+    clearInterval(timer);
+    pbEl.textContent = "▶";
+    const info = getDiffInfo(currentDiff);
+    ovTitle.textContent = "PAUSIERT";
+    ovTitle.style.color = "#00e5ff";
