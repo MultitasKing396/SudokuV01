@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Sudoku NFC Mini Game</title>
+<style>
+  html, body {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    overflow: hidden; touch-action: manipulation; overscroll-behavior: none;
+    margin: 0; padding: 0;
+  }
+  body {
+    background: #111; color: #fff; font-family: sans-serif; text-align: center;
+    user-select: none; display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+  }
+  .head { font-size: 13px; letter-spacing: 1px; margin-bottom: 6px; color: #ccc; }
+  .head b { color: #00e5ff; font-size: 15px; }
+  .bar { width: 292px; margin: 0 auto 8px; display: flex; justify-content: space-between; align-items: center; }
+  .reset { height: 32px; padding: 0 12px; font-size: 12px; background: #333; color: #fff; border: 0; border-radius: 6px; }
+  .pause { width: 42px; height: 32px; font-size: 15px; background: #2a2a2a; color: #fff; border: 1px solid #555; border-radius: 6px; }
+  .board-wrap { position: relative; width: 292px; height: 292px; margin: 0 auto 10px; }
+  .grid {
+    display: grid; grid-template-columns: repeat(9, 1fr); grid-template-rows: repeat(9, 1fr);
+    width: 292px; height: 292px; background: #000; border: 2px solid #666; box-sizing: border-box;
+  }
+  .cell {
+    display: flex; justify-content: center; align-items: center; font-size: 17px;
+    border-right: 1px solid #2a2a2a; border-bottom: 1px solid #2a2a2a; box-sizing: border-box;
+  }
+  .cell:nth-child(3n) { border-right: 2px solid #666; }
+  .cell:nth-child(9n) { border-right: 0; }
+  .cell.b-thick { border-bottom: 2px solid #666; }
+  .cell.given { color: #fff; font-weight: bold; }
+  .cell.user { color: #00e5ff; font-weight: bold; }
+  .cell.err { color: #ff3b30; background: rgba(255, 59, 48, 0.18); }
+  .cell.same { background: rgba(0, 229, 255, 0.12); }
+  .cell.sel { background: rgba(0, 229, 255, 0.34); }
+  .overlay {
+    position: absolute; inset: 0; background: rgba(0, 0, 0, 0.94);
+    display: none; flex-direction: column; justify-content: center; align-items: center;
+    border: 2px solid #666; box-sizing: border-box; padding: 16px; z-index: 30;
+  }
+  .overlay.show { display: flex; }
+  .overlay h2 { margin: 0 0 12px; font-size: 20px; color: #00e5ff; letter-spacing: 1px; }
+  .overlay p { margin: 4px 0; font-size: 14px; color: #fff; }
+  .overlay .sub { margin-top: 16px; font-size: 11px; color: #777; }
+  .diff-btns { display: flex; flex-direction: column; gap: 10px; width: 170px; margin-top: 6px; }
+  .diff-btns button {
+    padding: 12px 0; font-size: 14px; font-weight: bold; letter-spacing: 1px;
+    background: #222; border: 1px solid #555; border-radius: 8px;
+  }
+  .diff-btns button.easy { border-color: #00ff00; color: #00ff00; }
+  .diff-btns button.med { border-color: #00e5ff; color: #00e5ff; }
+  .diff-btns button.hard { border-color: #ff7700; color: #ff7700; }
+  .numpad { display: grid; grid-template-columns: repeat(5, 52px); gap: 6px; justify-content: center; }
+  .numpad button { height: 44px; font-size: 18px; font-weight: bold; background: #222; color: #fff; border: 1px solid #444; border-radius: 8px; }
+  .numpad button.del { color: #ff3b30; font-size: 16px; }
+  .info { font-size: 11px; color: #888; margin-top: 10px; }
+</style>
+</head>
+<body>
+  <div class="head">SUDOKU NFC MINI GAME<br><span id="lvl">LÄDT...</span> · ZEIT <b id="tm">00:00</b></div>
+  <div class="bar">
+    <button type="button" class="reset" onclick="menu()">Neu starten</button>
+    <button type="button" id="pb" class="pause" onclick="pause()">▶</button>
+  </div>
+  <div class="board-wrap">
+    <div id="grid" class="grid"></div>
+    <div id="menuOv" class="overlay show">
+      <h2>SCHWIERIGKEIT</h2>
+      <div class="diff-btns">
+        <button type="button" class="easy" onclick="go('easy')">EINFACH</button>
+        <button type="button" class="med" onclick="go('med')">MITTEL</button>
+        <button type="button" class="hard" onclick="go('hard')">SCHWER</button>
+      </div>
+    </div>
+    <div id="ov" class="overlay" onclick="ovClick()">
+      <h2 id="ovT">GELÖST!</h2>
+      <p id="ovM1"></p>
+      <p id="ovM2"></p>
+      <div class="sub" id="ovS">Tippen für neues Rätsel</div>
+    </div>
+  </div>
+  <div class="numpad">
+    <button type="button" onclick="num(1)">1</button>
+    <button type="button" onclick="num(2)">2</button>
+    <button type="button" onclick="num(3)">3</button>
+    <button type="button" onclick="num(4)">4</button>
+    <button type="button" onclick="num(5)">5</button>
+    <button type="button" onclick="num(6)">6</button>
+    <button type="button" onclick="num(7)">7</button>
+    <button type="button" onclick="num(8)">8</button>
+    <button type="button" onclick="num(9)">9</button>
+    <button type="button" class="del" onclick="num(0)">⌫</button>
+  </div>
+  <div class="info">by Alp</div>
+
+<script>
+var sol = "", puz = "", cur = "", sel = -1, sec = 0, tmr = null, psd = false, won = false, inM = true, diff = "med";
+
+function fmt(s) {
+  var m = Math.floor(s / 60), r = s % 60;
+  return (m < 10 ? "0" : "") + m + ":" + (r < 10 ? "0" : "") + r;
+}
+
+function info(d) {
+  if (d === "easy") return { n: "EINFACH", h: 32, c: "#00ff00" };
+  if (d === "hard") return { n: "SCHWER",  h: 54, c: "#ff7700" };
+  return { n: "MITTEL", h: 44, c: "#00e5ff" };
+}
+
+function makeBoard(holes) {
+  var base = "123456789456789123789123456234567891567891234891234567345678912678912345912345678";
+  var map = "123456789".split("");
+  for (var i = 8; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = map.slice(i, i + 1).pop();
+    map.splice(i, 1, map.slice(j, j + 1).pop());
+    map.splice(j, 1, tmp);
+  }
+  var b = "";
+  for (var k = 0; k < 81; k++) {
+    var d = Number(base.charAt(k)) - 1;
+    b += map.slice(d, d + 1).pop();
+  }
+  var rows = Array.of(0, 1, 2, 3, 4, 5, 6, 7, 8);
+  for (var g = 0; g < 3; g++) {
+    if (Math.random() > 0.5) {
+      var a = rows.slice(g * 3, g * 3 + 1).pop();
+      rows.splice(g * 3, 1, rows.slice(g * 3 + 1, g * 3 + 2).pop());
+      rows.splice(g * 3 + 1, 1, a);
+    }
+  }
+  sol = "";
+  for (var r = 0; r < 9; r++) {
+    var rr = rows.slice(r, r + 1).pop();
+    sol += b.slice(rr * 9, rr * 9 + 9);
+  }
+  var idx = Array.from({length: 81}, function(_, x) { return x; });
+  for (var m = 80; m > 0; m--) {
+    var n = Math.floor(Math.random() * (m + 1));
+    var t = idx.slice(m, m + 1).pop();
+    idx.splice(m, 1, idx.slice(n, n + 1).pop());
+    idx.splice(n, 1, t);
+  }
+  var hide = idx.slice(0, holes);
+  puz = "";
+  for (var z = 0; z < 81; z++) {
+    puz += hide.indexOf(z) !== -1 ? "0" : sol.charAt(z);
+  }
+  cur = puz;
+}
+
+function draw() {
+  var g = document.getElementById("grid");
+  g.innerHTML = "";
+  var sv = sel >= 0 ? cur.charAt(sel) : "0";
+  for (var i = 0; i < 81; i++) {
+    var c = document.createElement("div");
+    c.className = "cell";
+    var r = Math.floor(i / 9);
+    if (r === 2 || r === 5) c.classList.add("b-thick");
+    var v = cur.charAt(i);
+    if (v !== "0") {
+      c.textContent = v;
+      if (puz.charAt(i) !== "0") c.classList.add("given");
+      else {
+        c.classList.add("user");
+        if (v !== sol.charAt(i)) c.classList.add("err");
+      }
+      if (sv !== "0" && v === sv && i !== sel) c.classList.add("same");
+    }
+    if (i === sel) c.classList.add("sel");
+    c.setAttribute("onclick", "pick(" + i + ")");
+    g.appendChild(c);
+  }
+}
+
+function pick(i) {
+  if (inM || psd || won) return;
+  sel = i;
+  draw();
+}
+
+function num(n) {
+  if (inM || psd || won || sel < 0 || puz.charAt(sel) !== "0") return;
+  cur = cur.slice(0, sel) + String(n) + cur.slice(sel + 1);
+  draw();
+  if (n !== 0 && cur === sol) {
+    won = true;
+    clearInterval(tmr);
+    document.getElementById("pb").textContent = "▶";
+    var key = "sudoku_best_" + diff;
+    var best = Number(localStorage.getItem(key)) || 0;
+    if (best === 0 || sec < best) { best = sec; localStorage.setItem(key, best); }
+    var d = info(diff);
+    document.getElementById("ovT").textContent = "GELÖST!";
+    document.getElementById("ovT").style.color = d.c;
+    document.getElementById("ovM1").textContent = "Zeit (" + d.n + "): " + fmt(sec);
+    document.getElementById("ovM2").textContent = "Bestzeit: " + fmt(best);
+    document.getElementById("ovS").textContent = "Tippen für Stufenauswahl";
+    document.getElementById("ov").classList.add("show");
+  }
+}
+
+function pause() {
+  if (inM) return;
+  if (won) return menu();
+  psd = !psd;
+  if (psd) {
+    clearInterval(tmr);
+    document.getElementById("pb").textContent = "▶";
+    var d = info(diff);
+    var best = Number(localStorage.getItem("sudoku_best_" + diff)) || 0;
+    document.getElementById("ovT").textContent = "PAUSIERT";
+    document.getElementById("ovT").style.color = "#00e5ff";
+    document.getElementById("ovM1").textContent = "Aktuelle Zeit: " + fmt(sec);
+    document.getElementById("ovM2").textContent = best > 0 ? "Bestzeit (" + d.n + "): " + fmt(best) : "";
+    document.getElementById("ovS").textContent = "Tippen zum Fortsetzen";
+    document.getElementById("ov").classList.add("show");
+  } else {
+    document.getElementById("pb").textContent = "❚❚";
+    document.getElementById("ov").classList.remove("show");
+    runTimer();
+  }
+}
+
+function ovClick() {
+  if (won) menu();
+  else if (psd) pause();
+}
+
+function runTimer() {
+  clearInterval(tmr);
+  tmr = setInterval(function() {
+    sec++;
+    document.getElementById("tm").textContent = fmt(sec);
+  }, 1000);
+}
+
+function menu() {
+  clearInterval(tmr);
+  inM = true; psd = false; won = false; sel = -1; sec = 0;
+  document.getElementById("tm").textContent = "00:00";
+  document.getElementById("lvl").textContent = "STUFE WÄHLEN";
+  document.getElementById("lvl").style.color = "#ccc";
+  document.getElementById("pb").textContent = "▶";
+  document.getElementById("ov").classList.remove("show");
+  document.getElementById("menuOv").classList.add("show");
